@@ -274,6 +274,23 @@ class WebSearchInterceptionLogger(CustomLogger):
 
         kwargs["tools"] = converted_tools
 
+        tool_choice = kwargs.get("tool_choice")
+        if isinstance(tool_choice, dict):
+            tc_type = tool_choice.get("type", "")
+            tc_name = tool_choice.get("name", "")
+            if tc_type == "tool" and is_web_search_tool({"name": tc_name, "type": "function"}):
+                kwargs["tool_choice"] = {**tool_choice, "name": LITELLM_WEB_SEARCH_TOOL_NAME}
+                verbose_logger.debug(
+                    f"WebSearchInterception: Converted tool_choice.name from '{tc_name}' to '{LITELLM_WEB_SEARCH_TOOL_NAME}'"
+                )
+            elif tc_type == "function" and "function" in tool_choice:
+                fn = tool_choice["function"]
+                if isinstance(fn, dict) and is_web_search_tool({"type": "function", "function": fn}):
+                    kwargs["tool_choice"] = {**tool_choice, "function": {**fn, "name": LITELLM_WEB_SEARCH_TOOL_NAME}}
+                    verbose_logger.debug(
+                        f"WebSearchInterception: Converted tool_choice.function.name to '{LITELLM_WEB_SEARCH_TOOL_NAME}'"
+                    )
+
         if kwargs.get("stream"):
             verbose_logger.debug("WebSearchInterception: deployment hook converting stream=True to stream=False")
             kwargs["stream"] = False
@@ -351,7 +368,9 @@ class WebSearchInterceptionLogger(CustomLogger):
             return tool_choice
         return {**tool_choice, "name": LITELLM_WEB_SEARCH_TOOL_NAME}
 
-    async def async_pre_request_hook(self, model: str, messages: List[Dict], kwargs: Dict) -> Optional[Dict]:
+    async def async_pre_request_hook(
+        self, model: str, messages: List[Dict], kwargs: Dict
+    ) -> Optional[Dict]:
         """
         Pre-request hook to convert native web search tools to LiteLLM standard.
 
